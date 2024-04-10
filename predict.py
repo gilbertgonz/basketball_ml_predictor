@@ -7,13 +7,11 @@ import math
 import torch
 from ultralytics import YOLO
 
-from kalmanfilter import KalmanFilter 
+from kalman_filter import KalmanFilter 
 
 ## TODO:
 # - understand kalman filter
 # - organize kalman filter code
-# - dockerize
-# - put into its own repo
 
 kalman_predict = True
 polynomial_predict = True
@@ -41,8 +39,8 @@ res=[]
 data = {'ball':[],
         'rim':[]}
 
-x_list = []
-y_list = []
+ball_x_list = []
+ball_y_list = []
 
 def detect(cv_image, thresh=0.5):
     results = model(cv_image, conf=thresh, verbose=False)
@@ -96,8 +94,8 @@ if __name__ == '__main__':
                 rim_x2 = data['rim'][-1][1][0]
                 rim_y  = data['rim'][-1][0][1]
 
-                x_list.append(ball_x)
-                y_list.append(ball_y)
+                ball_x_list.append(ball_x)
+                ball_y_list.append(ball_y)
                 
                 # Kalman filter
                 if kalman_predict:
@@ -156,7 +154,7 @@ if __name__ == '__main__':
 
                 # Polynomial regression
                 if polynomial_predict:
-                    Ap, Bp, Cp = np.polyfit(x_list, y_list, 2)
+                    Ap, Bp, Cp = np.polyfit(ball_x_list, ball_y_list, 2)
                     for x in range(frame.shape[1]):
                         y = int(Ap * x ** 2 + Bp * x + Cp)
                         cv2.circle(annotated_frame,(x, y), 5, (0, 0, 255), -1)
@@ -174,7 +172,7 @@ if __name__ == '__main__':
                     cv2.circle(annotated_frame,(int(rim_x1), int(rim_y)), 5, (0, 255, 0), 5)
                     cv2.circle(annotated_frame,(int(rim_x2), int(rim_y)), 5, (0, 255, 0), 5)
                     
-                    # Ball point of intersection with rim_y
+                    # Ball trajectory intersection with rim_y
                     cv2.circle(annotated_frame,(x1, int(rim_y)), 5, (255, 255, 0), 5)
                     cv2.circle(annotated_frame,(x2, int(rim_y)), 5, (255, 255, 0), 5)
 

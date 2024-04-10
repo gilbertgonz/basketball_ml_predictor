@@ -4,7 +4,7 @@ Install [docker](https://docs.docker.com/engine/install/)
 
 To build:
 ```
-$ docker build -t sports_ml_tracking .
+$ docker build -t basketball_ml_tracking .
 ```
 
 To run:
