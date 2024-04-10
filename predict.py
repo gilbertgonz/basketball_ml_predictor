@@ -3,6 +3,7 @@
 import numpy as np
 import cv2
 import math
+import warnings
 
 import torch
 from ultralytics import YOLO
@@ -36,11 +37,6 @@ mu = np.array([0,0,0,0])
 P = np.diag([10,10,10,10])**2
 res=[]
 
-data = {'ball':[],
-        'rim':[]}
-
-ball_x_list = []
-ball_y_list = []
 
 def detect(cv_image, thresh=0.5):
     results = model(cv_image, conf=thresh, verbose=False)
@@ -59,9 +55,51 @@ def detect(cv_image, thresh=0.5):
 
     return results
 
+def polyfit(xpoints, ypoints, for_range, rim_y):
+    A, B, C = np.polyfit(xpoints, ypoints, 2)
+    for x in range(for_range[0], for_range[1]):
+        y = int(A * x ** 2 + B * x + C)
+        cv2.circle(annotated_frame,(x, y), 5, (0, 0, 255), -1)
+
+    a = A
+    b = B
+    c = C - rim_y
+
+    d = b*b - 4*a*c # discriminant
+    if d >= 0:
+        x1 = int((-b - math.sqrt(d)) / (2 * a)) # solution 1
+        x2 = int((-b + math.sqrt(d)) / (2 * a)) # solution 2
+
+        return x1, x2
+    else:
+        return None, None
+
+def interpolate_x_for_y(x_list, y_list, y_target):
+    if y_target in y_list:
+        index = y_list.index(y_target)
+        return x_list[index]
+    else:
+        # Find the closest y value in y_list to y_target
+        closest_y = min(y_list, key=lambda y: abs(y - y_target))
+        closest_index = y_list.index(closest_y)
+        
+        # Interpolate to estimate x value for y_target
+        x1, x2 = x_list[closest_index], x_list[closest_index + 1]
+        y1, y2 = y_list[closest_index], y_list[closest_index + 1]
+        
+        x_estimate = x1 + (x2 - x1) * (y_target - y1) / (y2 - y1)
+        return x_estimate
+
 if __name__ == '__main__':
     model = YOLO('best.pt')
 
+    data = {'ball':[],
+            'rim':[]}
+
+    ball_x_list = []
+    ball_y_list = []
+
+    prev_ball_x = 0
     count = 0
 
     # Set GPU if available
@@ -73,10 +111,14 @@ if __name__ == '__main__':
     model.to(device=device)
 
     video_path = "test_assets/steph.mov"
+    video_path = "test_assets/cropped.mp4"
     # video_path = "/home/gilberto/Downloads/test_imgs/steph2.mov"
     # video_path = "/home/gilberto/Downloads/test_imgs/klay.mov"
 
     vid = cv2.VideoCapture(video_path)
+
+    warnings.filterwarnings("ignore", category=np.RankWarning)  # suppressing this RankWarning since there may not 
+                                                                # be enough points initially for an accurate polyfit
 
     while True:        
         success, frame = vid.read()
@@ -96,6 +138,10 @@ if __name__ == '__main__':
 
                 ball_x_list.append(ball_x)
                 ball_y_list.append(ball_y)
+
+                # Rim points
+                cv2.circle(annotated_frame,(int(rim_x1), int(rim_y)), 5, (0, 255, 0), 5)
+                cv2.circle(annotated_frame,(int(rim_x2), int(rim_y)), 5, (0, 255, 0), 5)
                 
                 # Kalman filter
                 if kalman_predict:
@@ -123,63 +169,41 @@ if __name__ == '__main__':
                     xpu = [np.sqrt(P[0,0]) for _,P in res2]
                     ypu = [np.sqrt(P[1,1]) for _,P in res2]
 
-                    # # Draw predicted line
-                    # for n in range(len(xp)):
-                    #     cv2.circle(annotated_frame, (int(xp[n]),int(yp[n])), 5, (255, 0, 255), -1)
+                    # Draw predicted line
+                    for n in range(len(xp)):
+                        cv2.circle(annotated_frame, (int(xp[n]),int(yp[n])), 5, (255, 0, 255), -1)
+
+                    # Find estimated x value of trajectory-rim intersection
+                    xest = interpolate_x_for_y(xp, yp, rim_y)
+                    cv2.circle(annotated_frame,(int(xest), int(rim_y)), 5, (255, 255, 0), 5)
+
+                    # Check if est pos of ball is between rim corners
+                    if int(rim_x1) < xest < int(rim_x2):
+                        cv2.putText(annotated_frame, "Basket", (int(annotated_frame.shape[1] - 250), 100), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 5, cv2.LINE_AA)
                         
-                    if count > 0:
-                        Ak, Bk, Ck = np.polyfit(xp, yp, 2)
-                        for x in range(frame.shape[1]):
-                            y = int(Ak * x ** 2 + Bk * x + Ck)
-                            cv2.circle(annotated_frame,(x, y), 5, (255, 0, 255), -1)
-
-                        a = Ak
-                        b = Bk
-                        c = Ck - rim_y
-
-                        d = b*b - 4*a*c # discriminant
-                        if d >= 0:
-                            x1 = int((-b - math.sqrt(d)) / (2 * a)) # solution 1
-                            x2 = int((-b + math.sqrt(d)) / (2 * a)) # solution 2
-
-                        cv2.circle(annotated_frame,(int(rim_x1), int(rim_y)), 5, (0, 255, 0), 5)
-                        cv2.circle(annotated_frame,(int(rim_x2), int(rim_y)), 5, (0, 255, 0), 5)
-                        cv2.circle(annotated_frame,(x1, int(rim_y)), 5, (255, 255, 0), 5)
-                        cv2.circle(annotated_frame,(x2, int(rim_y)), 5, (255, 255, 0), 5)
-
-                        if int(rim_x1) < x1 < int(rim_x2) or int(rim_x1) < x2 < int(rim_x2):
-                            cv2.putText(annotated_frame, "Basket", (int(annotated_frame.shape[1] - 250), 100), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 5, cv2.LINE_AA)
-                    
-                    count += 1
-
                 # Polynomial regression
                 if polynomial_predict:
-                    Ap, Bp, Cp = np.polyfit(ball_x_list, ball_y_list, 2)
-                    for x in range(frame.shape[1]):
-                        y = int(Ap * x ** 2 + Bp * x + Cp)
-                        cv2.circle(annotated_frame,(x, y), 5, (0, 0, 255), -1)
+                    if ball_x > prev_ball_x:
+                        x1, x2 = polyfit(ball_x_list, ball_y_list, (ball_x, frame.shape[1]), rim_y)
 
-                    a = Ap
-                    b = Bp
-                    c = Cp - rim_y
+                        if x1 is not None:                        
+                            # Ball trajectory intersection with rim_y
+                            cv2.circle(annotated_frame,(x2, int(rim_y)), 5, (255, 255, 0), 5)
 
-                    d = b*b - 4*a*c # discriminant
-                    if d >= 0:
-                        x1 = int((-b - math.sqrt(d)) / (2 * a)) # solution 1
-                        x2 = int((-b + math.sqrt(d)) / (2 * a)) # solution 2
+                            # Check if est pos of ball is between rim corners
+                            if int(rim_x1) < x2 < int(rim_x2):
+                                cv2.putText(annotated_frame, "Basket", (int(annotated_frame.shape[1] - 250), 100), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 5, cv2.LINE_AA)
+                    elif ball_x < prev_ball_x:
+                        x1, x2 = polyfit(ball_x_list, ball_y_list, (0, ball_x), rim_y)
 
-                    # Rim points
-                    cv2.circle(annotated_frame,(int(rim_x1), int(rim_y)), 5, (0, 255, 0), 5)
-                    cv2.circle(annotated_frame,(int(rim_x2), int(rim_y)), 5, (0, 255, 0), 5)
-                    
-                    # Ball trajectory intersection with rim_y
-                    cv2.circle(annotated_frame,(x1, int(rim_y)), 5, (255, 255, 0), 5)
-                    cv2.circle(annotated_frame,(x2, int(rim_y)), 5, (255, 255, 0), 5)
+                        if x1 is not None: 
+                            cv2.circle(annotated_frame,(x1, int(rim_y)), 5, (255, 255, 0), 5)
 
-                    # Check both solutions
-                    if int(rim_x1) < x1 < int(rim_x2) or int(rim_x1) < x2 < int(rim_x2):
-                        cv2.putText(annotated_frame, "Basket", (int(annotated_frame.shape[1] - 250), 100), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 5, cv2.LINE_AA)
-            
+                            # Check if est pos of ball is between rim corners
+                            if int(rim_x1) < x1 < int(rim_x2):
+                                cv2.putText(annotated_frame, "Basket", (int(annotated_frame.shape[1] - 250), 100), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 5, cv2.LINE_AA)
+
+                prev_ball_x = ball_x
             else:
                 continue
 
@@ -188,10 +212,10 @@ if __name__ == '__main__':
 
             cv2.imshow("annotated_frame", annotated_frame)
 
-            key = cv2.waitKey(0) & 0xFF # show per frame
-            #key = cv2.waitKey(1)
-            #if key == ord(" "):  # Spacebar to pause
-            #    cv2.waitKey(-1)
+            # key = cv2.waitKey(0) & 0xFF # show per frame
+            key = cv2.waitKey(1)
+            if key == ord(" "):  # Spacebar to pause
+               cv2.waitKey(-1)
 
         else:
             break
