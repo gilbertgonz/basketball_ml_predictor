@@ -5,6 +5,7 @@ import cv2
 import warnings
 import torch
 from ultralytics import YOLO
+import argparse
 
 from utils import * 
 
@@ -15,7 +16,6 @@ def main():
     ####### Kalman filter params #######
     fps = 135
     dt = 1/fps
-
     noise = 3
 
     # Transition Matrix
@@ -47,8 +47,8 @@ def main():
     sigmaM = 0.0001
     sigmaZ = 3*noise
 
-    Q = sigmaM**2 * np.eye(4) # processNoiseCov
-    R = sigmaZ**2 * np.eye(2) # measurementNoiseCov
+    Q = sigmaM**2 * np.eye(4) # process noise cov
+    R = sigmaZ**2 * np.eye(2) # measurement noise cov
 
     ####################################
 
@@ -111,8 +111,11 @@ def main():
 
                     # Draw predicted trajectory
                     for n in range(len(xp)):
-                        uncertainty=(xpu[n]+ypu[n]) / 2
-                        cv2.circle(annotated_frame,(int(xp[n]),int(yp[n])),int(uncertainty),(255, 0, 255))
+                        if args.show_uncertainty:
+                            uncertainty=(xpu[n]+ypu[n]) / 2
+                            cv2.circle(annotated_frame, (int(xp[n]), int(yp[n])), int(uncertainty), (255, 0, 255))
+                        else:
+                            cv2.circle(annotated_frame,(int(xp[n]), int(yp[n])), 5, (255, 0, 255), -1)
 
                     # Find estimated x value of trajectory-rim intersection
                     xest = interpolate_x_for_y(xp, yp, rim_y)
@@ -162,7 +165,13 @@ def main():
     vid.release()
     cv2.destroyAllWindows()
 
+    print("\nThanks for watching!")
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--show-uncertainty", action="store_true", default=False, help="Set this flag show uncertainty from Kalman filter prediction")
+    args = parser.parse_args()
+
     model = YOLO('best.pt')
 
     data = {'ball':[],
@@ -180,7 +189,7 @@ if __name__ == '__main__':
     else:
         model.to(device=torch.device("cpu")) 
 
-    video_path = "test_assets/steph.mov" # fps: 16.74
+    video_path = "test_assets/steph.mov"   # fps: 16.74
     video_path = "test_assets/cropped.mp4" # fps: 19.12
 
     warnings.filterwarnings("ignore", category=np.RankWarning)  # suppressing this RankWarning since there may not 
