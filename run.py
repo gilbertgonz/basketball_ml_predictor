@@ -222,8 +222,8 @@ if __name__ == '__main__':
     else:
         model.to(device=torch.device("cpu")) 
 
-    video_path = "test_assets/test3.mov"   # fps: 16.74
-    # video_path = "test_assets/cropped.mp4" # fps: 19.12
+    # video_path = "test_assets/test3.mov"   # fps: 16.74
+    video_path = "test_assets/cropped.mp4" # fps: 19.12
 
     warnings.filterwarnings("ignore", category=np.RankWarning)  # suppressing this RankWarning since there may not 
                                                                 # be enough points initially for an accurate polyfit

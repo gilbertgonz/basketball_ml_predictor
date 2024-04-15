@@ -5,8 +5,8 @@ RUN apt update && apt install -y \
     && pip install ultralytics
 
 COPY test_assets/ /app/test_assets
-COPY kalman_filter.py /app/kalman_filter.py
-COPY predict.py /app/predict.py
+COPY utils.py /app/utils.py
+COPY run.py /app/run.py
 COPY best.pt /app/best.pt
 
 ### Final stage build
@@ -16,4 +16,4 @@ COPY --from=build / /
 
 WORKDIR /app
 
-CMD ["./predict.py"]
+CMD ["./run.py"]

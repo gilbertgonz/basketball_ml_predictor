@@ -35,7 +35,7 @@ def kalman(mu,P,F,Q,B,u,z,H,R):
     new_P  = (np.eye(len(P))-k @ H) @ pp
     return new_mu, new_P, zp
 
-def detect(model, cv_image, data, thresh=0.55):
+def detect(model, cv_image, data, thresh=0.68):
     results = model(cv_image, conf=thresh, verbose=False)
 
     for r in results:
