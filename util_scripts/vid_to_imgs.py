@@ -21,6 +21,6 @@ def save_frames(video_path, output_folder):
     vid.release()
 
 if __name__ == "__main__":
-    video_path = "test_assets/cropped.mp4"
-    output_folder = "/home/gilberto/Downloads/vid_to_imgs/cropped"
+    video_path = "/home/gilbertogonzalez/projects/basketball_ml_predictor/test_assets/test6.mov"
+    output_folder = "/home/gilbertogonzalez/Downloads/vid_to_imgs/test6"
     save_frames(video_path, output_folder)

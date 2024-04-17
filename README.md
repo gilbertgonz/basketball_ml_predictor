@@ -1,5 +1,7 @@
 # Basketball ML tracking and trajectory estimation
 
+![](assets/result.gif)
+
 Install [docker](https://docs.docker.com/engine/install/)
 
 To build:

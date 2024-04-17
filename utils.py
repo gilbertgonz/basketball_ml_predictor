@@ -1,8 +1,7 @@
 import numpy as np
 import numpy.linalg as la
 import cv2
-import torch
-from ultralytics import YOLO
+import os
 import math
 
 def kalman(mu,P,F,Q,B,u,z,H,R):
@@ -35,7 +34,7 @@ def kalman(mu,P,F,Q,B,u,z,H,R):
     new_P  = (np.eye(len(P))-k @ H) @ pp
     return new_mu, new_P, zp
 
-def detect(model, cv_image, data, thresh=0.68):
+def detect(model, cv_image, data, thresh=0.5):
     results = model(cv_image, conf=thresh, verbose=False)
 
     for r in results:
@@ -86,3 +85,8 @@ def interpolate_x_for_y(x_list, y_list, y_target):
         
         x_estimate = x1 + (x2 - x1) * (y_target - y1) / (y2 - y1)
         return x_estimate
+    
+def save_images(path, img, counter):
+    os.makedirs(path, exist_ok=True)
+    filename = f"{path}/img_{counter:04d}.jpg"
+    cv2.imwrite(filename, img)

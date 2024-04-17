@@ -9,17 +9,16 @@ import argparse
 
 from utils import * 
 
-## TODO:
-# - Continue training model
-# - Tidy up readme
-
 kalman_predict = True
 polynomial_predict = True
+img_counter = 0
 
-def main():
+def main(vidpath):
+    global img_counter
+
     ####### Kalman filter params #######
-    fps = 135
-    dt = 1/fps
+    fps   = 150
+    dt    = 1/fps
     noise = 3
 
     # Transition Matrix
@@ -29,7 +28,7 @@ def main():
         0, 0, 1, 0,
         0, 0, 0, 1 ]).reshape(4,4)
 
-    # adjust a and B accordingly
+    # Adjust a and B accordingly
     a = np.array([0, 9000])
 
     # Control Matrix
@@ -44,9 +43,9 @@ def main():
         [1,0,0,0,
         0,1,0,0]).reshape(2,4)
 
-    mu = np.zeros(4) # x, y, vx, vy
-    P = np.diag([1000,1000,1000,1000])**2
-    res=[]
+    mu  = np.zeros(4) # x, y, vx, vy
+    P   = np.diag([1000,1000,1000,1000])**2
+    res =[]
 
     sigmaM = 0.0001
     sigmaZ = 3*noise
@@ -55,17 +54,23 @@ def main():
     R = sigmaZ**2 * np.eye(2) # measurement noise cov
 
     ####################################
+    data = {'ball':[],
+            'rim':[]}
+
+    ball_x_list = []
+    ball_y_list = []
 
     prev_ball_x = 0
+    step_counter = 0
 
-    vid = cv2.VideoCapture(video_path)
+    vid = cv2.VideoCapture(vidpath)
     
     while True:
         ret, frame = vid.read()
 
         if ret:
+            # Detect and return annotated frame
             results = detect(model, frame, data)
-
             annotated_frame = results[0].plot()
 
             # Kalman legend
@@ -106,33 +111,59 @@ def main():
                 prediction_k = 0
                 prediction_scale_factor = 5 # dampening prediction values
                 
+                # Polynomial regression
+                if polynomial_predict:
+                    if ball_x > prev_ball_x:
+                        _, x2 = polyfit(annotated_frame, ball_x_list, ball_y_list, (ball_x, frame.shape[1]), rim_y)
+
+                        if len(data['rim']) > 0 and x2 is not None:
+                            # Ball trajectory intersection with rim_y
+                            cv2.circle(annotated_frame,(x2, int(rim_y)), 5, (255, 255, 0), 5)
+
+                            prediction_p += 50 - abs(x2 - rim_center) / prediction_scale_factor
+
+                            # Check if est pos of ball is between rim corners
+                            if int(rim_x1) < x2 < int(rim_x2):
+                                cv2.putText(annotated_frame, "Basket", (int(annotated_frame.shape[1] - 190), int(annotated_frame.shape[0] - 90)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+                    if ball_x < prev_ball_x:
+                        x1, _ = polyfit(annotated_frame, ball_x_list, ball_y_list, (0, ball_x), rim_y)
+
+                        if len(data['rim']) > 0 and x1 is not None:
+                            cv2.circle(annotated_frame,(x1, int(rim_y)), 5, (255, 255, 0), 5)
+
+                            prediction_p += 50 - abs(x1 - rim_center) / prediction_scale_factor
+
+                            # Check if est pos of ball is between rim corners
+                            if int(rim_x1) < x1 < int(rim_x2):
+                                cv2.putText(annotated_frame, "Basket", (int(annotated_frame.shape[1] - 190), int(annotated_frame.shape[0] - 90)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
                 # Kalman filter
                 if kalman_predict:
                     # Initial prediction
-                    mu,P,pred= kalman(mu,P,A,Q,B,a,np.array([ball_x, ball_y]),H,R)
-                    res += [(mu,P)]
+                    mu, P, pred = kalman(mu, P, A, Q, B, a, np.array([ball_x, ball_y]), H, R)
+                    res += [(mu, P)]
 
-                    mu2 = mu
-                    P2 = P
+                    mu2  = mu
+                    P2   = P
                     res2 = []
 
                     # Loop to predict entire trajectory
                     for _ in range(fps*2):
-                        mu2,P2,pred2= kalman(mu2,P2,A,Q,B,a,None,H,R)
-                        res2 += [(mu2,P2)]
+                        mu2, P2, pred2 = kalman(mu2, P2, A, Q, B, a, None, H, R)
+                        res2 += [(mu2, P2)]
                     
                     # Predictions
-                    xp=[mu2[0] for mu2,_ in res2]
-                    yp=[mu2[1] for mu2,_ in res2]
+                    xp = [mu2[0] for mu2, _ in res2]
+                    yp = [mu2[1] for mu2, _ in res2]
 
                     # Standard deviations
-                    xpu = [2*np.sqrt(P[0,0]) for _,P in res2]
-                    ypu = [2*np.sqrt(P[1,1]) for _,P in res2]
+                    xpu = [2 * np.sqrt(P[0, 0]) for _, P in res2]
+                    ypu = [2 * np.sqrt(P[1, 1]) for _, P in res2]
 
                     # Draw predicted trajectory
                     for n in range(len(xp)):
                         if args.show_uncertainty:
-                            uncertainty=(xpu[n]+ypu[n]) / 2
+                            uncertainty = (xpu[n] + ypu[n]) / 2
                             cv2.circle(annotated_frame, (int(xp[n]), int(yp[n])), int(uncertainty), (255, 0, 255))
                         else:
                             cv2.circle(annotated_frame,(int(xp[n]), int(yp[n])), 5, (255, 0, 255), -1)
@@ -147,36 +178,10 @@ def main():
                         # Check if est pos of ball is between rim corners
                         if int(rim_x1) < xest < int(rim_x2):
                                 cv2.putText(annotated_frame, "Basket", (int(annotated_frame.shape[1] - 140), int(annotated_frame.shape[0] - 140)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-                            
-                # Polynomial regression
-                if polynomial_predict:
-                    if ball_x > prev_ball_x:
-                        _, x2 = polyfit(annotated_frame, ball_x_list, ball_y_list, (ball_x, frame.shape[1]), rim_y)
 
-                        if len(data['rim']) > 0:
-                            if x2 is not None:                        
-                                # Ball trajectory intersection with rim_y
-                                cv2.circle(annotated_frame,(x2, int(rim_y)), 5, (255, 255, 0), 5)
-
-                                prediction_p += 50 - abs(x2 - rim_center) / prediction_scale_factor
-
-                                # Check if est pos of ball is between rim corners
-                                if int(rim_x1) < x2 < int(rim_x2):
-                                    cv2.putText(annotated_frame, "Basket", (int(annotated_frame.shape[1] - 190), int(annotated_frame.shape[0] - 90)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-                    elif ball_x < prev_ball_x:
-                        x1, _ = polyfit(annotated_frame, ball_x_list, ball_y_list, (0, ball_x), rim_y)
-
-                        if len(data['rim']) > 0:
-                            if x1 is not None: 
-                                cv2.circle(annotated_frame,(x1, int(rim_y)), 5, (255, 255, 0), 5)
-
-                                prediction_p += 50 - abs(x1 - rim_center) / prediction_scale_factor
-
-                                # Check if est pos of ball is between rim corners
-                                if int(rim_x1) < x1 < int(rim_x2):
-                                    cv2.putText(annotated_frame, "Basket", (int(annotated_frame.shape[1] - 190), int(annotated_frame.shape[0] - 90)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-
-                prev_ball_x = ball_x
+                # Updating prev_ball_x to every 5th step bcuz steps are too small
+                if step_counter % 5 == 0:
+                    prev_ball_x = ball_x
             else:
                 continue
 
@@ -186,6 +191,11 @@ def main():
             cv2.putText(annotated_frame, f"{prediction_total}%", (int(annotated_frame.shape[1] - 150), int(annotated_frame.shape[0] - 40)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
             
             cv2.imshow("Result", annotated_frame)
+            step_counter += 1
+
+            if save_path is not None:
+                save_images(save_path, annotated_frame, img_counter)
+                img_counter += 1
 
             # key = cv2.waitKey(0) & 0xFF # show per frame
             key = cv2.waitKey(1)
@@ -196,9 +206,7 @@ def main():
             break
 
     vid.release()
-    cv2.destroyAllWindows()
-
-    print("\nThanks for watching!")
+    cv2.destroyAllWindows()   
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -207,14 +215,7 @@ if __name__ == '__main__':
 
     model = YOLO('best.pt')
 
-    data = {'ball':[],
-            'rim':[]}
-
-    ball_x_list = []
-    ball_y_list = []
-
-    prev_ball_x = 0
-    count = 0
+    save_path = None # "imgs"
 
     # Set GPU if available
     if torch.cuda.is_available():
@@ -222,10 +223,13 @@ if __name__ == '__main__':
     else:
         model.to(device=torch.device("cpu")) 
 
-    # video_path = "test_assets/test3.mov"   # fps: 16.74
-    video_path = "test_assets/cropped.mp4" # fps: 19.12
-
     warnings.filterwarnings("ignore", category=np.RankWarning)  # suppressing this RankWarning since there may not 
                                                                 # be enough points initially for an accurate polyfit
 
-    main()
+    # Go through all vids
+    test_dir = "assets"
+    for filename in os.listdir(test_dir):
+        if filename.endswith(".mov"):
+            main(f"{test_dir}/{filename}")
+
+    print("\nThanks for watching!\n")
