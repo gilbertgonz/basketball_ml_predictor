@@ -17,7 +17,7 @@ def main(vidpath):
     global img_counter
 
     ####### Kalman filter params #######
-    fps   = 150
+    fps   = 160
     dt    = 1/fps
     noise = 3
 
