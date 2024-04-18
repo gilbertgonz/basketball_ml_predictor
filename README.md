@@ -1,6 +1,6 @@
 # Basketball ML tracking and trajectory estimation
 
-This project aims to analyze basketball videos to predict successful shots. It uses YOLOv8 to detect the ball/rim, and kalman filtering + polynomial regression to track the ball and predict its trajectory towards the rim. The probability of a successful shot is computed using a combined probability of both predictions. 
+This project aims to predict successful shots from basketball videos. It uses YOLOv8 to detect the ball/rim and kalman filtering + polynomial regression to track the ball and predict its trajectory towards the rim. The probability of a successful shot is computed using a combined probability of both predictions. 
 
 ![](assets/results.gif)
 
