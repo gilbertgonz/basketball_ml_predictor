@@ -16,44 +16,13 @@ img_counter = 0
 def main(vidpath):
     global img_counter
 
-    ####### Kalman filter params #######
-    fps   = 160
-    dt    = 1/fps
-    noise = 3
-
-    # Transition Matrix
-    A = np.array(
-        [1, 0, dt, 0,
-        0, 1, 0, dt,
-        0, 0, 1, 0,
-        0, 0, 0, 1 ]).reshape(4,4)
-
-    # Adjust a and B accordingly
-    a = np.array([0, 9000])
-
-    # Control Matrix
-    B = np.array(
-        [dt**2/2, 0,
-        0, dt**2/2,
-        dt, 0,
-        0, dt ]).reshape(4,2)
-
-    # Measurement Matrix
-    H = np.array(
-        [1,0,0,0,
-        0,1,0,0]).reshape(2,4)
+    
 
     mu  = np.zeros(4) # x, y, vx, vy
     P   = np.diag([1000,1000,1000,1000])**2
     res =[]
 
-    sigmaM = 0.0001
-    sigmaZ = 3*noise
-
-    Q = sigmaM**2 * np.eye(4) # process noise cov
-    R = sigmaZ**2 * np.eye(2) # measurement noise cov
-
-    ####################################
+    
     data = {'ball':[],
             'rim':[]}
 
@@ -89,7 +58,6 @@ def main(vidpath):
                 ball_x = data['ball'][-1][0]
                 ball_y = data['ball'][-1][1]
                 
-
                 ball_x_list.append(ball_x)
                 ball_y_list.append(ball_y)
 
@@ -140,7 +108,9 @@ def main(vidpath):
                 # Kalman filter
                 if kalman_predict:
                     # Initial prediction
-                    mu, P, pred = kalman(mu, P, A, Q, B, a, np.array([ball_x, ball_y]), H, R)
+                    fps = int(vid.get(cv2.CAP_PROP_FPS) * 2.5)
+
+                    mu, P, pred = kalman(mu, P, np.array([ball_x, ball_y]), fps)
                     res += [(mu, P)]
 
                     mu2  = mu
@@ -149,7 +119,7 @@ def main(vidpath):
 
                     # Loop to predict entire trajectory
                     for _ in range(fps*2):
-                        mu2, P2, pred2 = kalman(mu2, P2, A, Q, B, a, None, H, R)
+                        mu2, P2, pred2 = kalman(mu2, P2, None, fps)
                         res2 += [(mu2, P2)]
                     
                     # Predictions
@@ -229,7 +199,7 @@ if __name__ == '__main__':
     # Go through all vids
     test_dir = "assets"
     for filename in os.listdir(test_dir):
-        if filename.endswith(".mov"):
+        if filename.endswith((".mov", ".mp4")):
             main(f"{test_dir}/{filename}")
 
     print("\nThanks for watching!\n")

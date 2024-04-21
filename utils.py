@@ -4,11 +4,11 @@ import cv2
 import os
 import math
 
-def kalman(mu,P,F,Q,B,u,z,H,R):
+def kalman(mu,P,z, fps):
     """
         mu: Current state vector.
         P:  Covariance matrix.
-        F:  Dynamic system matrix.
+        A:  Dynamic system matrix.
         Q:  Covariance matrix of the process noise.
         B:  Control model matrix.
         u:  Control input vector.
@@ -16,9 +16,43 @@ def kalman(mu,P,F,Q,B,u,z,H,R):
         H:  Observation model matrix.
         R:  Covariance matrix of the observation noise.
     """
+
+    ####### Kalman filter params #######
+    dt    = 1/fps
+    noise = 3
+
+    # Transition Matrix
+    A = np.array(
+        [1, 0, dt, 0,
+        0, 1, 0, dt,
+        0, 0, 1, 0,
+        0, 0, 0, 1 ]).reshape(4,4)
+
+    # Adjust a and B accordingly
+    u = np.array([0, 9000])
+
+    # Control Matrix
+    B = np.array(
+        [dt**2/2, 0,
+        0, dt**2/2,
+        dt, 0,
+        0, dt ]).reshape(4,2)
+
+    # Measurement Matrix
+    H = np.array(
+        [1,0,0,0,
+        0,1,0,0]).reshape(2,4)
     
-    mup = F @ mu + B @ u
-    pp  = F @ P @ F.T + Q
+    sigmaM = 0.0001
+    sigmaZ = 3*noise
+
+    Q = sigmaM**2 * np.eye(4) # process noise cov
+    R = sigmaZ**2 * np.eye(2) # measurement noise cov
+
+    ####################################
+    
+    mup = A @ mu + B @ u
+    pp  = A @ P @ A.T + Q
 
     zp = H @ mup
 
@@ -34,8 +68,8 @@ def kalman(mu,P,F,Q,B,u,z,H,R):
     new_P  = (np.eye(len(P))-k @ H) @ pp
     return new_mu, new_P, zp
 
-def detect(model, cv_image, data, thresh=0.5):
-    results = model(cv_image, conf=thresh, verbose=False)
+def detect(model, cv_image, data, thresh=0.55):
+    results = model(cv_image, conf=thresh, verbose=False, max_det = 2)
 
     for r in results:
         boxes = r.boxes
