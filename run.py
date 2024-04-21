@@ -16,12 +16,9 @@ img_counter = 0
 def main(vidpath):
     global img_counter
 
-    
-
     mu  = np.zeros(4) # x, y, vx, vy
     P   = np.diag([1000,1000,1000,1000])**2
     res =[]
-
     
     data = {'ball':[],
             'rim':[]}
@@ -38,6 +35,10 @@ def main(vidpath):
         ret, frame = vid.read()
 
         if ret:
+            # Desired img width
+            desired_width = 1000
+            frame = cv2.resize(frame, (desired_width, int(frame.shape[0] * (desired_width / frame.shape[1]))))
+
             # Detect and return annotated frame
             results = detect(model, frame, data)
             annotated_frame = results[0].plot()
