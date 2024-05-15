@@ -7,7 +7,9 @@ This project aims to predict successful shots from basketball videos. It uses YO
 ## To run:
 1. Install [docker](https://docs.docker.com/engine/install/)
 
-2. Build:
+2. Clone repo
+
+3. Build:
 ```
 $ docker build -t basketball_ml_tracking .
 ```
