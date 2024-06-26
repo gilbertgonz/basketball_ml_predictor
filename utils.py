@@ -4,7 +4,7 @@ import cv2
 import os
 import math
 
-def kalman(mu,P,z, fps):
+def kalman(mu, P, z, fps):
     """
         mu: Current state vector.
         P:  Covariance matrix.
@@ -17,55 +17,65 @@ def kalman(mu,P,z, fps):
         R:  Covariance matrix of the observation noise.
     """
 
-    ####### Kalman filter params #######
-    dt    = 1/fps
-    noise = 3
+    ####### Kalman filter parameters #######
+    dt = 1 / fps  # Time step
+    noise = 3     # Measurement noise parameter
 
-    # Transition Matrix
+    # Transition Matrix: Defines how the state evolves over time
     A = np.array(
         [1, 0, dt, 0,
-        0, 1, 0, dt,
-        0, 0, 1, 0,
-        0, 0, 0, 1 ]).reshape(4,4)
+         0, 1, 0, dt,
+         0, 0, 1, 0,
+         0, 0, 0, 1]).reshape(4, 4)
 
-    # Adjust a and B accordingly
+    # Control input vector (e.g., forces or accelerations applied to system)
     u = np.array([0, 9000])
 
-    # Control Matrix
+    # Control Matrix: Defines how control inputs affect state
     B = np.array(
-        [dt**2/2, 0,
-        0, dt**2/2,
-        dt, 0,
-        0, dt ]).reshape(4,2)
+        [dt**2 / 2, 0,
+         0, dt**2 / 2,
+         dt, 0,
+         0, dt]).reshape(4, 2)
 
-    # Measurement Matrix
+    # Measurement Matrix: Defines how the state is mapped to observation space
     H = np.array(
-        [1,0,0,0,
-        0,1,0,0]).reshape(2,4)
-    
-    sigmaM = 0.0001
-    sigmaZ = 3*noise
+        [1, 0, 0, 0,
+         0, 1, 0, 0]).reshape(2, 4)
 
-    Q = sigmaM**2 * np.eye(4) # process noise cov
-    R = sigmaZ**2 * np.eye(2) # measurement noise cov
+    # Process noise covariance matrix
+    sigmaM = 0.0001
+    Q = sigmaM**2 * np.eye(4)
+
+    # Measurement noise covariance matrix
+    sigmaZ = 3 * noise
+    R = sigmaZ**2 * np.eye(2)
 
     ####################################
-    
-    mup = A @ mu + B @ u
-    pp  = A @ P @ A.T + Q
 
+    # Prediction Step
+    mup = A @ mu + B @ u  # Predict next state based on current state and control input
+    pp = A @ P @ A.T + Q  # Predict next covariance matrix based on current covariance and process noise
+
+    # Predict observation based on predicted state
     zp = H @ mup
 
-    # if no observation just do a prediction
+    # If no observation, return predicted state and covariance
     if z is None:
         return mup, pp, zp
 
-    epsilon = z - zp
+    # Update Step
+    epsilon = z - zp  # Compute residual between actual and predicted observation
 
-    k = pp @ H.T @ la.inv(H @ pp @ H.T +R)
+    # Compute gain
+    k = pp @ H.T @ la.inv(H @ pp @ H.T + R)
 
+    # Update state estimate based on residual and gain
     new_mu = mup + k @ epsilon
-    new_P  = (np.eye(len(P))-k @ H) @ pp
+
+    # Update covariance matrix based on gain and predicted covariance
+    new_P = (np.eye(len(P)) - k @ H) @ pp
+
     return new_mu, new_P, zp
 
 def detect(model, cv_image, data, thresh=0.55):
